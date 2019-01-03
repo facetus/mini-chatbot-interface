@@ -4,4 +4,4 @@ export const sendAction = (ws, action) => {
     ws.send(JSON.stringify(action));
 }
 
-export const findById = (target: ObjectID) => (value: { id: ObjectID}) => value.id === target
+export const findById = (target: Number) => (value: { id: Number}) => value.id === target

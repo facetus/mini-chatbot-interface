@@ -1,17 +1,20 @@
 import { sendAction } from "../utils";
-import { USER_MESSAGE, LOGIN_USER } from "../constants";
-import { login, register } from '../services/user';
+import { USER_MESSAGE, LOGIN_USER, SAVE_DETAILS, USER_RESULTS } from "../constants";
+import { login, register, getDetails, searchByUsername } from '../services/user';
+import { Method } from "../lib/socketApp";
 
-export default [{
+const userController: Method[] = [{
     type: 'login',
     action: async (ws, req, data) => {
             const { username, password } = data;
-            const { error, token, expiresIn } = await login(username, password);
+            const { error, token, expiresIn, id } = await login(username, password);
             if (error) {
                 sendAction(ws, { type: USER_MESSAGE, data: { type: 'error', text: error } });
                 return;
             }
             sendAction(ws, { type: LOGIN_USER, data: { expiresIn, token } });
+            let user = await getDetails(id);
+            sendAction(ws, { type: SAVE_DETAILS, data: { ...user.toJSON() }})
         }
     },{
     type: 'register',
@@ -27,7 +30,37 @@ export default [{
     }, {
         type: 'getUserInfo',
         action: (ws, req, data) => {
-            const { id } = req;
+        }
+    },{
+        type: 'inviteFriend',
+        action: async (ws, req, data) => { 
+            const { id, friendId } = data;
+        }
+    }, {
+        use: ['auth'],
+        type: 'getDetails',
+        action: async (ws, req, data) => {
+            const { id } = data;
+            const user = await getDetails(id);
+            if(!user) {
+                sendAction(ws, { type: 'LOGOUT'})
+                return;
+            }
+            sendAction(ws, { type: 'SAVE_DETAILS', data: { ...user.toJSON() }})
+        },
+    }, {
+        use: ['auth'],
+        type: 'searchUsers',
+        action: async (ws, req, data) => {
+            const users = await searchByUsername(data.username, data.id);
+            sendAction(ws, { type: USER_RESULTS, data: users })
+        }
+    }, {
+        use: ['auth'],
+        type: 'addFriend',
+        action: async (ws, req, data) => {
+            const { id } = data;
         }
     }
 ]
+export default userController;

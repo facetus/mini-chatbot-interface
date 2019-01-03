@@ -1,44 +1,35 @@
-import { getManager, getRepository, ObjectID } from "typeorm";
 import * as bcrypt from 'bcrypt';
-import User from "../entity/User";
+import { User, UserModel } from "../entity/User";
 import * as jwt from 'jsonwebtoken';
 import { SECRET } from '../../.env';
 import { findById } from "../utils";
+import { Document, Schema } from 'mongoose';
 
-export async function getInfo(id) {
-    try {
-        const user = getRepository(User).findOne(id);
-        if(!user) {
-            throw new Error('Error finding user in the database');
-        }
-        return {
-            user
-        }
-    } catch (error) {
+let searchById = (id) => (value) => value.id == id
 
-    }
-}
-
-export async function register(username, firstname, lastname, email, password, confirmPassword): Promise<{ user?: User, error?: string }> {
+export async function register(username, firstName, lastName, email, password, confirmPassword): Promise<{ user?: Document, error?: string }> {
     try {
         // const connection = await createConnection();
-        if(!username || !password || !firstname || !lastname || !email || !confirmPassword) {
-            return {
-                error: 'Not all fields are submited'
-            }
+        if (!username || !password || !firstName || !lastName || !email || !confirmPassword) {
+            throw new Error('Not all fields are submited');
         }
         if(password !== confirmPassword) {
-            return {
-                error: 'Passwords are not matching'
-            }
+            throw new Error('Passwords are not matching')
         }
-        const user = new User();
-        user.firstName = firstname;
-        user.lastName = lastname;
-        user.password = password;
-        user.email = email;
-        user.username = username;
-        await getManager().save(user);
+        let oldUser = await User.findOne({
+            username
+        });
+        if (oldUser) {
+            throw new Error('User already exists')
+        }
+        let user = new User({
+            password,
+            username,
+            email,
+            firstName,
+            lastName
+        });
+        await user.save();
         return {
             user
         }
@@ -49,13 +40,15 @@ export async function register(username, firstname, lastname, email, password, c
     }
 }
 
-export async function login(username, password): Promise<{ token?: string, error?: string, expiresIn?: number}> {
+export async function login(username, password): Promise<{ token?: string, error?: string, expiresIn?: number, id?: string}> {
     try {
-        const user: User = await getRepository(User).findOne({ username });
+        const user = await User.findOne({
+            username
+        }).exec();
         if(!user) {
             throw new Error('username or password incorrect');
         }
-        let matches = await bcrypt.compare(password, user.password);
+        let matches = user.comparePassword(password);
         if(!matches) {
             throw new Error('username or password incorrect');
         }
@@ -66,7 +59,8 @@ export async function login(username, password): Promise<{ token?: string, error
         });
         return {
             token,
-            expiresIn: 1000 * 60 * 60 * 24
+            expiresIn: 1000 * 60 * 60 * 24,
+            id: user.id
         }
     } catch(error) {
         return {
@@ -75,42 +69,53 @@ export async function login(username, password): Promise<{ token?: string, error
     }
 }
 
-export async function friendInvite(id: ObjectID, friendId: ObjectID) {
-    const userRepo = getRepository(User);
+export async function friendInvite(id: number, friendId: number) {
     const [friend, user] = [
-        await userRepo.findOne(friendId),
-        await userRepo.findOne(id)
+        await User.findById(friendId),
+        await User.findById(id)
     ]
-    if (!user) {
-        return;
+    let isFriend = user.friends.findIndex(searchById(friend.id)) !== -1;
+    let didInvite = user.invitations.findIndex(searchById(friend.id)) !== -1;
+    let isInvited = friend.invites.findIndex(searchById(user.id)) !== -1;
+    if (isInvited || didInvite || isFriend) {
+        throw new Error('You are already friends or you have invited that user');
     }
-    const friendIndex = friend.friends.findIndex(findById(user.id));
-    const userIndex = user.friends.findIndex(findById(friend.id));
-    if (!(friendIndex !== -1) || !(userIndex !== -1)) {
-        return;
-    }
-    friend.invitations.push(user);
-    user.invites.push(user);
-    userRepo.save(user);
-    userRepo.save(friend);
+    user.invitations.push(friend.id);
+    friend.invites.push(user.id);
+    await user.save();
+    await friend.save();
 }
 
-export async function acceptInvite(id: ObjectID, friendId: ObjectID) {
-    const userRepo = getRepository(User);
+export async function acceptInvite(id: string, friendId: string) {
     const [friend, user] = [
-        await userRepo.findOne(friendId),
-        await userRepo.findOne(id)
+        await User.findById(friendId),
+        await User.findById(id)
     ]
-    if (!user || !friend) {
-        return;
+    //its important to not use triple equals here as it will not match String with ObjectId...
+    let isInvited = user.invites.findIndex(searchById(friend.id));
+    let didInvite = friend.invitations.findIndex(searchById(user.id));
+    if(isInvited === -1 || didInvite === -1) {
+        throw new Error('You are not friends with that user');
     }
-    const invitationIndex = friend.invitations.findIndex(findById(user.id));
-    const inviteIndex = user.invites.findIndex(findById(friend.id));
-    if (!(invitationIndex !== -1) || !(inviteIndex !== -1)) {
-        return;
-    }
-    friend.friends.push(user);
-    user.friends.push(friend);
-    delete user.invites[inviteIndex];
-    delete friend.invitations[inviteIndex];
+    user.invites.splice(isInvited, 1);
+    friend.invitations.splice(didInvite, 1);
+    user.friends.push(friend.id);
+    friend.friends.push(friend.id);
+    await user.save();
+    await friend.save();
+}
+
+export async function getDetails(id: string) {
+    return await User.findById(id).populate([{
+        path: 'friends',
+        select: 'username id'
+    }])
+}
+
+export async function searchByUsername(username: string, id: string) {
+    const result = await User.find({
+        username: { $regex: username, $options: 'i'},
+        _id: { $ne: id }
+    }).select('_id username').exec(); 
+    return result;
 }
