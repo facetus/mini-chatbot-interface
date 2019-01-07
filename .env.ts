@@ -1,1 +1,1 @@
-export const SECRET = '1Lfv0CZ!VXNv.Bez_P9-$m-kL#t=6w';
+export const SECRET = "1Lfv0CZ!VXNv.Bez_P9-$m-kL#t=6w";

@@ -1,14 +1,14 @@
-import * as WebSocket from 'ws';
-import { IncomingMessage } from 'http';
-import * as uuid from 'uuid';
-import { verify } from 'jsonwebtoken';
-import { SECRET } from '../../.env';
-import { sendAction } from '../utils';
+import { IncomingMessage } from "http";
+import { verify } from "jsonwebtoken";
+import * as uuid from "uuid";
+import * as WebSocket from "ws";
+import { SECRET } from "../../.env";
+import { sendAction } from "../utils";
 
 export interface Method {
-    type: string,
+    type: string;
     action?: (ws?: CustomSocket, req?: IncomingMessage, data?: any) => void;
-    use?: string[]
+    use?: string[];
 }
 
 export interface MethodRequest {
@@ -18,7 +18,6 @@ export interface MethodRequest {
 
 export type Middleware = (connection, req, data, next) => void;
 
-
 export interface CustomSocket extends WebSocket {
     id: string;
     broadcast: (users: string[], action: any) => void;
@@ -26,19 +25,19 @@ export interface CustomSocket extends WebSocket {
 
 export default class SocketApp {
 
-    server: WebSocket.Server;
-    methods: Method[] = [];
-    middlewares: Middleware[] = [];
-    users: {
-        [id: string]: {
+    public server: WebSocket.Server;
+    public methods: Method[] = [];
+    public middlewares: Middleware[] = [];
+    public users: {
+        [id: string]: Array<{
             socket: CustomSocket,
-            lastAction: Date
-        }[]
-    } = {}
+            lastAction: Date,
+        }>,
+    } = {};
 
     constructor(options: WebSocket.ServerOptions) {
         this.server = new WebSocket.Server(options);
-        this.server.on('connection', (ws: CustomSocket, request) => {
+        this.server.on("connection", (ws: CustomSocket, request) => {
             ws.id = uuid();
             ws.broadcast = this.broadcast;
             ws.on("message", (data) => {
@@ -47,56 +46,15 @@ export default class SocketApp {
         });
     }
 
-    private handleData = (connection: CustomSocket, req: IncomingMessage, data: string) => {
-        try {
-            const parsedData: MethodRequest = JSON.parse(data);
-            const { type, data: payload } = parsedData;
-            let currentMiddlewareIndex = -1;
-            let toCall: Method;
-            for (let method of this.methods) {
-                if (method.type === type) {
-                    toCall = method;
-                    break;
-                }
-            }
-            if(!toCall) {
-                return;
-            }
-            const next = () => {
-                if (payload.id) {
-                    this.registerSocket(connection, payload.id);
-                }
-                currentMiddlewareIndex++;
-                if(currentMiddlewareIndex === this.middlewares.length) {
-                    toCall.action(connection, req, payload);
-                    return;
-                }
-                let currentMiddleware = this.middlewares[currentMiddlewareIndex];
-                if(toCall.use) {
-                    if(toCall.use.indexOf(currentMiddleware.name) !== -1) {
-                        currentMiddleware(connection, req, payload, next);
-                    } else {
-                        next();
-                    }
-                } else {
-                    next();
-                }
-            }
-           next();
-        } catch (error) {
-            console.log(error);
-        }
-    }
-
-    broadcast = (users: string[], action) => {
-        for(let user of users) {
-            if(!this.users[user]) {
+    public broadcast = (users: string[], action) => {
+        for (const user of users) {
+            if (!this.users[user]) {
                 continue;
             }
-            for(let { socket, lastAction } of this.users[user]) {
-                if(socket.readyState === socket.CLOSED) {
+            for (const { socket, lastAction } of this.users[user]) {
+                if (socket.readyState === socket.CLOSED) {
                     console.log(socket.CLOSED);
-                    console.log('Websocket is closed');
+                    console.log("Websocket is closed");
                     continue;
                 }
                 sendAction(socket, action);
@@ -104,12 +62,12 @@ export default class SocketApp {
         }
     }
 
-    registerSocket(connection: CustomSocket, userId: string) {
-        console.log(`Trying to register socket ${connection.id} to user ${userId}`)
+    public registerSocket(connection: CustomSocket, userId: string) {
+        console.log(`Trying to register socket ${connection.id} to user ${userId}`);
         const sockets = this.users[userId];
         if (sockets) {
             let found = false;
-            for (let socketEntry of sockets) {
+            for (const socketEntry of sockets) {
                 if (socketEntry.socket.id === connection.id) {
                     found = true;
                     socketEntry.lastAction = new Date();
@@ -118,39 +76,80 @@ export default class SocketApp {
             if (!found) {
                 sockets.push({
                     socket: connection,
-                    lastAction: new Date()
-                })
+                    lastAction: new Date(),
+                });
             }
         } else {
             this.users[userId] = [{
                 socket: connection,
-                lastAction: new Date()
+                lastAction: new Date(),
             }];
         }
     }
 
-    clearUnused() {
+    public clearUnused() {
         Object.keys(this.users).forEach((key) => {
-            for(let socketEntry of this.users[key]) {
-                
+            for (const socketEntry of this.users[key]) {
+                // TODO
             }
-        }); 
+        });
     }
 
-    addMethod(type: string, action: (ws?: WebSocket, req?: IncomingMessage, data?: any) => void, use?: string[]) {
+    public addMethod(type: string, action: (ws?: WebSocket, req?: IncomingMessage, data?: any) => void, use?: string[]) {
         this.methods.push({
             type,
             action,
-            use
-        })
+            use,
+        });
     }
 
-    addMidleware(middleware: Middleware) {
-        this.middlewares.push(middleware)
+    public addMidleware(middleware: Middleware) {
+        this.middlewares.push(middleware);
     }
 
-    getServer() {
+    public getServer() {
         return this.server;
+    }
+
+    private handleData = (connection: CustomSocket, req: IncomingMessage, data: string) => {
+        try {
+            const parsedData: MethodRequest = JSON.parse(data);
+            const { type, data: payload } = parsedData;
+            let currentMiddlewareIndex = -1;
+            let toCall: Method;
+            for (const method of this.methods) {
+                if (method.type === type) {
+                    toCall = method;
+                    break;
+                }
+            }
+            if (!toCall) {
+                return;
+            }
+            const next = () => {
+                if (payload.id) {
+                    this.registerSocket(connection, payload.id);
+                }
+                currentMiddlewareIndex++;
+                if (currentMiddlewareIndex === this.middlewares.length) {
+                    toCall.action(connection, req, payload);
+                    return;
+                }
+                const currentMiddleware = this.middlewares[currentMiddlewareIndex];
+                if (toCall.use) {
+                    if (toCall.use.indexOf(currentMiddleware.name) !== -1) {
+                        currentMiddleware(connection, req, payload, next);
+                    } else {
+                        next();
+                    }
+                } else {
+                    next();
+                }
+            };
+            next();
+        } catch (error) {
+            console.log(error);
+        }
     }
 
 }

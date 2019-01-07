@@ -1,16 +1,16 @@
-import * as mongoose from 'mongoose';
-import { register, login, friendInvite, acceptInvite } from '../src/services/user';
-import { User } from '../src/entity/User';
+import * as mongoose from "mongoose";
+import { User } from "../src/entity/User";
+import { acceptInvite, friendInvite, login, register } from "../src/services/user";
 
-mongoose.connect('mongodb://localhost/test');
-let db = mongoose.connection;
-db.on('open', async () => {
-    let user = await User.findOne({
-        username: "test_user"
+mongoose.connect("mongodb://localhost/test");
+const db = mongoose.connection;
+db.on("open", async () => {
+    const user = await User.findOne({
+        username: "test_user",
     }).exec();
-    let friend = await User.findOne({
-        username: "nikpolik"
-    })
+    const friend = await User.findOne({
+        username: "nikpolik",
+    });
     await acceptInvite(friend.id, user.id);
     db.close();
 });
@@ -26,14 +26,14 @@ db.on('open', async () => {
 //         },
 //         relations: ['friends', 'invites', 'invitations']
 //     }))[0];
-    
+
 //     const nikpolik = (await userRepo.find({
 //         where: {
 //             username: 'nikos'
 //         },
 //         relations: ['friends', 'invites', 'invitations']
 //     }))[0];
-    
+
 //     console.log(nikpolik.invites);
 //     console.log(test_user.invitations);
 //     friendInvite(test_user.id, nikpolik.id);
