@@ -1,27 +1,10 @@
 import { IncomingMessage } from "http";
-import { verify } from "jsonwebtoken";
 import * as uuid from "uuid";
 import * as WebSocket from "ws";
-import { SECRET } from "../../.env";
 import { sendAction } from "../utils";
-
-export interface Method {
-    type: string;
-    action?: (ws?: CustomSocket, req?: IncomingMessage, data?: any) => void;
-    use?: string[];
-}
-
-export interface MethodRequest {
-    type: string;
-    data: any;
-}
+import { CustomSocket, Method, MethodRequest } from "./interfaces";
 
 export type Middleware = (connection, req, data, next) => void;
-
-export interface CustomSocket extends WebSocket {
-    id: string;
-    broadcast: (users: string[], action: any) => void;
-}
 
 export default class SocketApp {
 
@@ -29,14 +12,15 @@ export default class SocketApp {
     public methods: Method[] = [];
     public middlewares: Middleware[] = [];
     public users: {
-        [id: string]: Array<{
+        [id: string]: [{
             socket: CustomSocket,
             lastAction: Date,
-        }>,
+        }],
     } = {};
 
     constructor(options: WebSocket.ServerOptions) {
         this.server = new WebSocket.Server(options);
+
         this.server.on("connection", (ws: CustomSocket, request) => {
             ws.id = uuid();
             ws.broadcast = this.broadcast;
@@ -65,6 +49,7 @@ export default class SocketApp {
     public registerSocket(connection: CustomSocket, userId: string) {
         console.log(`Trying to register socket ${connection.id} to user ${userId}`);
         const sockets = this.users[userId];
+
         if (sockets) {
             let found = false;
             for (const socketEntry of sockets) {
@@ -115,17 +100,21 @@ export default class SocketApp {
         try {
             const parsedData: MethodRequest = JSON.parse(data);
             const { type, data: payload } = parsedData;
+
             let currentMiddlewareIndex = -1;
             let toCall: Method;
+
             for (const method of this.methods) {
                 if (method.type === type) {
                     toCall = method;
                     break;
                 }
             }
+
             if (!toCall) {
                 return;
             }
+
             const next = () => {
                 if (payload.id) {
                     this.registerSocket(connection, payload.id);
@@ -146,7 +135,9 @@ export default class SocketApp {
                     next();
                 }
             };
+
             next();
+
         } catch (error) {
             console.log(error);
         }

@@ -111,4 +111,5 @@ const userController: Method[] = [
         },
     },
 ];
+
 export default userController;
