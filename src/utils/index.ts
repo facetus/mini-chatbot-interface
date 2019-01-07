@@ -1,5 +1,3 @@
-import { ObjectID, BaseEntity } from "typeorm";
-
 export const sendAction = (ws, action) => {
     ws.send(JSON.stringify(action));
 }

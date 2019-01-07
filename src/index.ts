@@ -6,7 +6,6 @@ import middleware from './middleware';
 mongoose.connect('mongodb://localhost/test');
 
 let db = mongoose.connection;
-
 db.on('open', () => {
     const socket = new SocketApp({
         port: 8080
@@ -17,7 +16,7 @@ db.on('open', () => {
     socket.addMidleware(middleware.auth);
 });
 
-process.on('SIGKILL', () => {
+process.on('uncaughtException', () => {
     console.log('Gracefully closing connections and exiting');
     db.close();
     process.exit(0);

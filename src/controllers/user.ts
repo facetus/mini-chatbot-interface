@@ -1,6 +1,6 @@
 import { sendAction } from "../utils";
-import { USER_MESSAGE, LOGIN_USER, SAVE_DETAILS, USER_RESULTS } from "../constants";
-import { login, register, getDetails, searchByUsername } from '../services/user';
+import { USER_MESSAGE, LOGIN_USER, SAVE_DETAILS, USER_RESULTS, ADD_NOTIFICATION } from "../constants";
+import { login, register, getDetails, searchByUsername, friendInvite, acceptInvite, deleteFriend } from '../services/user';
 import { Method } from "../lib/socketApp";
 
 const userController: Method[] = [{
@@ -53,13 +53,51 @@ const userController: Method[] = [{
         type: 'searchUsers',
         action: async (ws, req, data) => {
             const users = await searchByUsername(data.username, data.id);
+            ws.broadcast([], {});
             sendAction(ws, { type: USER_RESULTS, data: users })
         }
     }, {
         use: ['auth'],
         type: 'addFriend',
         action: async (ws, req, data) => {
-            const { id } = data;
+            const { id, friendId } = data;
+            try {
+                let { user, friend } = await friendInvite(id, friendId);
+                ws.broadcast([friendId], { type: ADD_NOTIFICATION, data: { title: 'Friend request recieved', text: `You have recieved a friend request from ${user.username}`, type: 'success' } });
+                ws.broadcast([id], { type: ADD_NOTIFICATION, data: { title: 'Friend request sent', text: 'The friend request has been recieved', type: 'success' } });
+                ws.broadcast([id], { type: 'SAVE_DETAILS', data: { ...user.toJSON() } })
+                ws.broadcast([friendId], { type: 'SAVE_DETAILS', data: { ...friend.toJSON() } })
+            } catch (error) {
+                console.log('error');
+                ws.broadcast([id], { type: ADD_NOTIFICATION, data: { title: 'Cannot invite', text: 'Cannot invite user, you are already friends with that user or the user does not exist', type: 'error' } });
+            }
+        }
+    }, {
+        use: ['auth'],
+        type: 'acceptInvite',
+        action: async (ws, req , data) => {
+            const { id, friendId } = data;
+            try {
+                let { user, friend } = await acceptInvite(id, friendId);
+                ws.broadcast([friendId], { type: ADD_NOTIFICATION, data: { title: 'Friend request accepted', text: `${user.username} has accepted your friend request`, type: 'success' } });
+                ws.broadcast([id], { type: 'SAVE_DETAILS', data: { ...user.toJSON() } })
+                ws.broadcast([friendId], { type: 'SAVE_DETAILS', data: { ...friend.toJSON() } })
+            } catch (error) {
+                console.log('error');
+            }
+        }
+    }, {
+        use: ['auth'],
+        type: 'deleteFriend',
+        action: async (ws, req , data) => {
+            const { id, friendId } = data;
+            try {
+                let { user, friend } = await deleteFriend(id, friendId);
+                ws.broadcast([id], { type: 'SAVE_DETAILS', data: { ...user.toJSON() } })
+                ws.broadcast([friendId], { type: 'SAVE_DETAILS', data: { ...friend.toJSON() } })
+            } catch (error) {
+                console.log('error');
+            }
         }
     }
 ]

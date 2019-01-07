@@ -5,7 +5,10 @@ import { SECRET } from '../../.env';
 import { findById } from "../utils";
 import { Document, Schema } from 'mongoose';
 
-let searchById = (id) => (value) => value.id == id
+let searchById = (id) => (value) => {
+    console.log(`checking ${id} with ${value._id} and found ${value.id === id}`);
+    return value._id == id
+}
 
 export async function register(username, firstName, lastName, email, password, confirmPassword): Promise<{ user?: Document, error?: string }> {
     try {
@@ -78,12 +81,17 @@ export async function friendInvite(id: number, friendId: number) {
     let didInvite = user.invitations.findIndex(searchById(friend.id)) !== -1;
     let isInvited = friend.invites.findIndex(searchById(user.id)) !== -1;
     if (isInvited || didInvite || isFriend) {
+        console.log('error?');
         throw new Error('You are already friends or you have invited that user');
     }
     user.invitations.push(friend.id);
     friend.invites.push(user.id);
     await user.save();
     await friend.save();
+    return {
+        user: await user.getRelations(),
+        friend: await friend.getRelations()
+    }
 }
 
 export async function acceptInvite(id: string, friendId: string) {
@@ -101,15 +109,38 @@ export async function acceptInvite(id: string, friendId: string) {
     friend.invitations.splice(didInvite, 1);
     user.friends.push(friend.id);
     friend.friends.push(friend.id);
-    await user.save();
-    await friend.save();
+    [await user.save(), await friend.save()];
+    [await user.getRelations(), await friend.getRelations()]
+    return {
+        user,
+        friend
+    }
+}
+
+export async function deleteFriend(id: string, friendId: string) {
+    const [user, friend] = [
+        await User.findById(id),
+        await User.findById(friendId)
+    ];
+    let userIndex = user.friends.findIndex(searchById(friend.id));
+    let friendIndex = friend.friends.findIndex(searchById(user.id));
+    if(userIndex === -1 || friendIndex === -1) {
+        throw new Error('You are not friends with that user');
+    }
+    user.friends.splice(userIndex, 1);
+    friend.friends.splice(friendIndex, 1);
+    [await user.save(), await friend.save()];
+    [await user.getRelations(), await friend.getRelations()];
+    return {
+        user,
+        friend
+    }    
 }
 
 export async function getDetails(id: string) {
-    return await User.findById(id).populate([{
-        path: 'friends',
-        select: 'username id'
-    }])
+    let user = await User.findById(id);
+    await user.getRelations();
+    return user;
 }
 
 export async function searchByUsername(username: string, id: string) {

@@ -15,7 +15,8 @@ export interface UserModel extends Document {
     friends: (UserModel | string)[];
     invites: (UserModel | string)[];
     invitations: (UserModel | string)[];
-    comparePassword: (password) => boolean
+    comparePassword: (password) => boolean;
+    getRelations: () => UserModel;
 }
 
 const UserSchema = new Schema({
@@ -49,6 +50,20 @@ UserSchema.pre('save', async function (this: UserModel, next) {
 UserSchema.methods.comparePassword = async function (this: UserModel, password) {
     return await bcrypt.compare(password, this.password);
 }
+
+UserSchema.methods.getRelations = async function(this: UserModel) {
+    await this.populate([{
+        path: 'friends',
+        select: 'username id'
+    }, {
+        path: 'invitations',
+        select: 'username id'
+    }, {
+        path: 'invites',
+        select: 'username id'
+    }]).execPopulate();
+    return this;
+};
 
 UserSchema.set('toJSON', {
     transform: function (doc, ret) {
