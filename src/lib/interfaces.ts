@@ -16,3 +16,5 @@ export interface CustomSocket extends WebSocket {
     id: string;
     broadcast: (users: string[], action: any) => void;
 }
+
+export type Middleware = (connection, req, data, next) => void;

@@ -2,9 +2,7 @@ import { IncomingMessage } from "http";
 import * as uuid from "uuid";
 import * as WebSocket from "ws";
 import { sendAction } from "../utils";
-import { CustomSocket, Method, MethodRequest } from "./interfaces";
-
-export type Middleware = (connection, req, data, next) => void;
+import { CustomSocket, Method, MethodRequest, Middleware } from "./interfaces";
 
 export default class SocketApp {
 
